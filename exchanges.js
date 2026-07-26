@@ -148,12 +148,22 @@ const Bybit = {
   async balance() {
     const params = { accountType: "UNIFIED" };
     const qs = new URLSearchParams(params).toString();
-    const d  = await request(`${this.BASE}/v5/account/wallet-balance?${qs}`, { headers: this._headers(qs) });
+    const d  = await this._get(`/v5/account/wallet-balance?${qs}`);
     const acc = d?.result?.list?.[0];
+    // totalAvailableBalance pode vir vazio na conta UNIFIED sem modo de margem
+    // Usa totalWalletBalance como fallback
+    const avail = parseFloat(acc?.totalAvailableBalance || 0)
+      || parseFloat(acc?.totalWalletBalance || 0)
+      || parseFloat(acc?.totalEquity || 0);
     return {
-      totalEquity:    +(acc?.totalEquity    || 0),
-      availableBalance: +(acc?.totalAvailableBalance || 0),
-      unrealisedPnl:  +(acc?.totalUnrealisedPnl || 0),
+      totalEquity:      +(acc?.totalEquity      || 0),
+      availableBalance: +avail.toFixed(4),
+      walletBalance:    +(acc?.totalWalletBalance || 0),
+      unrealisedPnl:    +(acc?.totalPerpUPL      || acc?.totalUnrealisedPnl || 0),
+      // Saldo por moeda
+      coins: (acc?.coin || [])
+        .filter(c => parseFloat(c.equity || 0) > 0)
+        .map(c => ({ coin: c.coin, equity: +c.equity, available: +(c.availableToWithdraw || c.equity || 0) })),
     };
   },
 
