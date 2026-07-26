@@ -89,7 +89,35 @@ const Bybit = {
       "X-BAPI-TIMESTAMP":    ts,
       "X-BAPI-RECV-WINDOW":  "5000",
       "X-BAPI-SIGN":         this._sign(params, ts),
+      "X-BAPI-BROKER-ID":    "",
     };
+  },
+
+  // Testa autenticação e detecta o erro exato
+  async testAuth() {
+    try {
+      const qs = "accountType=UNIFIED";
+      const d  = await this._get(`/v5/account/wallet-balance?${qs}`);
+      return { ok: true, data: d };
+    } catch(e) {
+      // Tenta com conta CONTRACT
+      try {
+        const qs = "accountType=CONTRACT";
+        const ts = Date.now().toString();
+        const sig = this._sign(qs, ts);
+        const d = await request(`${this.BASE}/v5/account/wallet-balance?${qs}`, {
+          headers: {
+            "X-BAPI-API-KEY": cfg.bybit.apiKey,
+            "X-BAPI-TIMESTAMP": ts,
+            "X-BAPI-RECV-WINDOW": "5000",
+            "X-BAPI-SIGN": sig,
+          }
+        });
+        return { ok: true, type: "CONTRACT", data: d };
+      } catch(e2) {
+        return { ok: false, error: e.message, error2: e2.message };
+      }
+    }
   },
 
   // Tenta endpoints em sequência até um funcionar
