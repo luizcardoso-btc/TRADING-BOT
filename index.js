@@ -13,7 +13,7 @@ const scanner  = require("./scanner");
 const arb      = require("./arbitrage");
 const executor = require("./executor");
 const risk     = require("./risk");
-const { Bybit, Binance, Novadex } = require("./exchanges");
+const { Bybit, Binance, Novadex, testBybitConnectivity } = require("./exchanges");
 
 const app    = express();
 const server = http.createServer(app);
@@ -1196,6 +1196,25 @@ app.get("/", (req,res) => {
 });
 
 // ── Inicialização ──────────────────────────────────────────────────────
+
+// ── Testa conectividade com as exchanges ─────────────────────────────
+app.get("/api/ping", async (req,res) => {
+  const results = {};
+  await Promise.allSettled([
+    Bybit.ticker("BTCUSDT","linear")
+      .then(t => { results.bybit   = { ok:true, bid:t.bid, ask:t.ask }; })
+      .catch(e => { results.bybit  = { ok:false, error:e.message.slice(0,150) }; }),
+    Binance.ticker("BTCUSDT")
+      .then(t => { results.binance = { ok:true, bid:t.bid, ask:t.ask }; })
+      .catch(e => { results.binance= { ok:false, error:e.message.slice(0,150) }; }),
+    Novadex.ticker("BTCUSDT")
+      .then(t => { results.novadex = { ok:true, last:t.last }; })
+      .catch(e => { results.novadex= { ok:false, error:e.message.slice(0,150) }; }),
+  ]);
+  const allOk = Object.values(results).every(r=>r.ok);
+  res.json({ ok:allOk, results, region:process.env.RAILWAY_REGION||"unknown", ts:Date.now() });
+});
+
 server.listen(cfg.port, () => {
   console.log(`\n╔═══════════════════════════════════════╗`);
   console.log(`║  ACS Trading Bot — rodando na :${cfg.port}  ║`);
@@ -1204,6 +1223,15 @@ server.listen(cfg.port, () => {
   console.log(`║  Auto-scan: ${cfg.signals.autoExecute?"ATIVO":"desativado"} (sinais)           ║`);
   console.log(`║  Auto-arb:  ${cfg.arb.autoExecute?"ATIVO":"desativado"} (arbitragem)      ║`);
   console.log(`╚═══════════════════════════════════════╝\n`);
+
+  // Testa conectividade Bybit no boot
+  testBybitConnectivity().then(endpoint => {
+    if (endpoint) {
+      console.log(`[BOT] Bybit OK via ${endpoint}`);
+    } else {
+      console.warn("[BOT] ⚠️  Bybit bloqueada — verifique a região do servidor");
+    }
+  });
 
   // Inicia monitor de posições
   executor.startMonitor();
