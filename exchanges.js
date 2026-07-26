@@ -174,21 +174,27 @@ const Bybit = {
 
   // Conta (requer chaves)
   async balance() {
-    const params = { accountType: "UNIFIED" };
-    const qs = new URLSearchParams(params).toString();
-    const d  = await this._get(`/v5/account/wallet-balance?${qs}`);
-    const acc = d?.result?.list?.[0];
-    // totalAvailableBalance pode vir vazio na conta UNIFIED sem modo de margem
-    // Usa totalWalletBalance como fallback
+    const qs  = "accountType=UNIFIED";
+    const ts  = Date.now().toString();
+    const sig = crypto.createHmac("sha256", cfg.bybit.apiSecret)
+      .update(ts + cfg.bybit.apiKey + "5000" + qs).digest("hex");
+    const d   = await request(`${this.BASE}/v5/account/wallet-balance?${qs}`, {
+      headers: {
+        "X-BAPI-API-KEY":     cfg.bybit.apiKey,
+        "X-BAPI-TIMESTAMP":   ts,
+        "X-BAPI-RECV-WINDOW": "5000",
+        "X-BAPI-SIGN":        sig,
+      }
+    });
+    const acc   = d?.result?.list?.[0];
     const avail = parseFloat(acc?.totalAvailableBalance || 0)
       || parseFloat(acc?.totalWalletBalance || 0)
       || parseFloat(acc?.totalEquity || 0);
     return {
-      totalEquity:      +(acc?.totalEquity      || 0),
+      totalEquity:      +(acc?.totalEquity       || 0),
       availableBalance: +avail.toFixed(4),
       walletBalance:    +(acc?.totalWalletBalance || 0),
-      unrealisedPnl:    +(acc?.totalPerpUPL      || acc?.totalUnrealisedPnl || 0),
-      // Saldo por moeda
+      unrealisedPnl:    +(acc?.totalPerpUPL       || acc?.totalUnrealisedPnl || 0),
       coins: (acc?.coin || [])
         .filter(c => parseFloat(c.equity || 0) > 0)
         .map(c => ({ coin: c.coin, equity: +c.equity, available: +(c.availableToWithdraw || c.equity || 0) })),
@@ -196,9 +202,18 @@ const Bybit = {
   },
 
   async positions(symbol = "") {
-    const params = { category:"linear", symbol, settleCoin:"USDT" };
-    const qs = new URLSearchParams(params).toString();
-    const d  = await request(`${this.BASE}/v5/position/list?${qs}`, { headers: this._headers(qs) });
+    const qs  = new URLSearchParams({ category:"linear", symbol, settleCoin:"USDT" }).toString();
+    const ts  = Date.now().toString();
+    const sig = crypto.createHmac("sha256", cfg.bybit.apiSecret)
+      .update(ts + cfg.bybit.apiKey + "5000" + qs).digest("hex");
+    const d  = await request(`${this.BASE}/v5/position/list?${qs}`, {
+      headers: {
+        "X-BAPI-API-KEY":     cfg.bybit.apiKey,
+        "X-BAPI-TIMESTAMP":   ts,
+        "X-BAPI-RECV-WINDOW": "5000",
+        "X-BAPI-SIGN":        sig,
+      }
+    });
     return (d?.result?.list || [])
       .filter(p => parseFloat(p.size) > 0)
       .map(p => ({
