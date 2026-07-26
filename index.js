@@ -682,11 +682,14 @@ async function doLogin() {
   const btn = document.getElementById('loginBtn');
   if (!url||!key) { err.textContent='Preencha a URL e a Admin Key.'; return; }
   err.textContent=''; btn.disabled=true; btn.textContent='Conectando...';
+  // Garante URL sem barra final e com https
+  const cleanURL = url.replace(/\/+$/,'');
   try {
-    const r = await fetch(url+'/health');
+    const r = await fetch(cleanURL+'/health', { mode:'cors' });
     if (!r.ok) throw new Error('Bot não respondeu ('+r.status+')');
-    const r2 = await fetch(url+'/api/status', { headers:{'x-admin-key':key} });
+    const r2 = await fetch(cleanURL+'/api/status', { headers:{'x-admin-key':key}, mode:'cors' });
     if (!r2.ok) throw new Error('Admin Key inválida');
+    url = cleanURL;
     BOT_URL=url; ADMIN_KEY=key;
     localStorage.setItem('acs_bot_url', url);
     localStorage.setItem('acs_bot_key', key);
