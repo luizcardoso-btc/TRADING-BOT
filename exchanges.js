@@ -6,31 +6,53 @@
 
 const crypto  = require("crypto");
 const https   = require("https");
+const http    = require("http");
 const cfg     = require("./config");
 
-// ── HTTP helper robusto ────────────────────────────────────────────────
+// ── Proxy para contornar bloqueios de IP (Bybit/CloudFront) ──────────
+// Configure HTTPS_PROXY nas variáveis do Railway
+// Ex: HTTPS_PROXY=http://user:pass@proxy.example.com:8080
+const PROXY_URL = process.env.HTTPS_PROXY || process.env.https_proxy || null;
+let proxyAgent  = null;
+if (PROXY_URL) {
+  try {
+    const { HttpsProxyAgent } = require("https-proxy-agent");
+    proxyAgent = new HttpsProxyAgent(PROXY_URL);
+    console.log("[PROXY] Usando proxy:", PROXY_URL.replace(/:[^:@]+@/, ":***@"));
+  } catch(e) {
+    console.warn("[PROXY] Erro ao inicializar proxy:", e.message);
+  }
+}
+
+// ── HTTP helper com suporte a proxy ───────────────────────────────────
 function request(url, opts = {}, body = null) {
   return new Promise((resolve, reject) => {
-    const u   = new URL(url);
-    const lib = u.protocol === "https:" ? https : require("http");
+    const u    = new URL(url);
     const data = body ? JSON.stringify(body) : null;
-    const req  = lib.request({
+
+    const options = {
       hostname: u.hostname,
-      port:     u.port || 443,
+      port:     u.port || (u.protocol === "https:" ? 443 : 80),
       path:     u.pathname + u.search,
       method:   data ? "POST" : "GET",
       headers: {
-        "User-Agent":   "ACS-Bot/1.0",
+        "User-Agent":   "Mozilla/5.0 (compatible; ACS-Bot/1.0)",
         "Content-Type": "application/json",
+        "Accept":       "application/json",
         ...(data ? { "Content-Length": Buffer.byteLength(data) } : {}),
         ...opts.headers,
       },
-      timeout: opts.timeout || 8000,
-    }, res => {
+      timeout: opts.timeout || 10000,
+      // Usa proxy se configurado
+      ...(proxyAgent ? { agent: proxyAgent } : {}),
+    };
+
+    const lib = u.protocol === "https:" ? https : http;
+    const req = lib.request(options, res => {
       let d = "";
       res.on("data", c => d += c);
       res.on("end", () => {
-        if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}: ${d.slice(0,120)}`));
+        if (res.statusCode >= 400) return reject(new Error(`HTTP ${res.statusCode}: ${d.slice(0,150)}`));
         try { resolve(JSON.parse(d)); } catch(e) { reject(new Error(`JSON: ${d.slice(0,80)}`)); }
       });
     });
