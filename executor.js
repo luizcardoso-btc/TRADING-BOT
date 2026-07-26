@@ -31,9 +31,35 @@ async function executeSignal(signal, balanceUSD = 1000) {
     return { ok:false, error:check.reason };
   }
 
-  // 2. Tamanho da posição
-  const qty = risk.positionSize(signal, balanceUSD);
+  // 2. Tamanho da posição — Kelly Criterion adaptado para R/R
+  // f = (p*b - q) / b  onde p=probabilidade, b=R/R, q=1-p
+  const p   = (signal.prob || 65) / 100;
+  const b   = Math.max(signal.rr || 1.5, 1);
+  const q   = 1 - p;
+  const kelly = Math.max(0, (p * b - q) / b);
+  // Usa metade do Kelly para ser conservador (Half-Kelly)
+  const halfKelly = kelly * 0.5;
+  // Limita a 2% da banca por operação
+  const riskPct   = Math.min(halfKelly, 0.02);
+  const riskUSD   = balanceUSD * riskPct;
+  const stopDist  = Math.abs(signal.entry - signal.sl);
+  if (stopDist <= 0) return { ok:false, error:"Stop loss inválido" };
+  const rawQty    = riskUSD / stopDist;
+  const maxQty    = cfg.risk.maxPositionSizeUSD / signal.entry;
+  const qty       = +Math.min(rawQty, maxQty).toFixed(3);
   if (qty <= 0) return { ok:false, error:"Tamanho de posição calculado como zero" };
+
+  // Log da matemática da operação
+  addLog({
+    type: "sizing",
+    symbol: signal.symbol,
+    kelly: (kelly*100).toFixed(1)+'%',
+    halfKelly: (halfKelly*100).toFixed(1)+'%',
+    riskUSD: riskUSD.toFixed(2),
+    qty,
+    rr: b.toFixed(2),
+    prob: signal.prob+'%',
+  });
 
   // 3. Envia ordem
   try {
