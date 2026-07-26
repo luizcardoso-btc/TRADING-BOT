@@ -676,28 +676,60 @@ let autoScanOn=false, autoSigExec=false, autoArbExec=false;
 
 // ══ LOGIN ═══════════════════════════════════════════════════════════
 async function doLogin() {
-  const url = document.getElementById('loginUrl').value.trim().replace(/\\/$/,'');
-  const key = document.getElementById('loginKey').value.trim();
-  const err = document.getElementById('loginErr');
-  const btn = document.getElementById('loginBtn');
-  if (!url||!key) { err.textContent='Preencha a URL e a Admin Key.'; return; }
-  err.textContent=''; btn.disabled=true; btn.textContent='Conectando...';
-  // Garante URL sem barra final e com https
-  const cleanURL = url.replace(/\/+$/,'');
+  const urlEl = document.getElementById('loginUrl');
+  const keyEl = document.getElementById('loginKey');
+  const err   = document.getElementById('loginErr');
+  const btn   = document.getElementById('loginBtn');
+  if (!urlEl||!keyEl||!err||!btn) { alert('Elementos não encontrados'); return; }
+
+  const url = (urlEl.value||urlEl.placeholder||'').trim().replace(/\/+$/,'');
+  const key = keyEl.value.trim();
+
+  err.textContent='';
+
+  if (!url) { err.textContent='Digite a URL do bot.'; return; }
+  if (!key) { err.textContent='Digite a Admin Key.'; return; }
+
+  btn.disabled=true; btn.textContent='Conectando...';
+  err.textContent='Verificando '+url+' ...';
+
   try {
-    const r = await fetch(cleanURL+'/health', { mode:'cors' });
-    if (!r.ok) throw new Error('Bot não respondeu ('+r.status+')');
-    const r2 = await fetch(cleanURL+'/api/status', { headers:{'x-admin-key':key}, mode:'cors' });
-    if (!r2.ok) throw new Error('Admin Key inválida');
-    url = cleanURL;
-    BOT_URL=url; ADMIN_KEY=key;
+    // Testa health com timeout
+    const ctrl = new AbortController();
+    const tid  = setTimeout(()=>ctrl.abort(), 8000);
+    const r    = await fetch(url+'/health', { signal:ctrl.signal }).catch(e=>{ throw new Error('Não foi possível alcançar o bot: '+e.message); });
+    clearTimeout(tid);
+
+    if (!r.ok) throw new Error('Bot respondeu com erro HTTP '+r.status);
+
+    const health = await r.json().catch(()=>({}));
+    if (!health.ok) throw new Error('Resposta inesperada do bot');
+
+    // Testa auth
+    const r2 = await fetch(url+'/api/status', {
+      headers: { 'x-admin-key': key, 'Content-Type':'application/json' }
+    }).catch(e=>{ throw new Error('Erro ao verificar chave: '+e.message); });
+
+    if (r2.status === 401) throw new Error('Admin Key inválida');
+    if (!r2.ok) throw new Error('Erro na API: '+r2.status);
+
+    // Sucesso
+    BOT_URL    = url;
+    ADMIN_KEY  = key;
     localStorage.setItem('acs_bot_url', url);
     localStorage.setItem('acs_bot_key', key);
+
     document.getElementById('loginScreen').style.display='none';
     document.getElementById('app').style.display='flex';
     initApp();
-  } catch(e) { err.textContent='Erro: '+e.message; }
-  btn.disabled=false; btn.textContent='CONECTAR AO BOT';
+
+  } catch(e) {
+    err.textContent='❌ '+e.message;
+    console.error('[LOGIN]', e);
+  }
+
+  btn.disabled=false;
+  btn.textContent='CONECTAR AO BOT';
 }
 
 function doLogout() {
