@@ -46,15 +46,47 @@ module.exports = {
 
   // ── SINAIS AUTOMÁTICOS ────────────────────────────────
   signals: {
-    // Pares mais líquidos — menor spread, melhor execução
+    // Top 100 pares por volume e liquidez na Bybit Futures
     pairs: [
+      // Tier 1 — Maior liquidez e volume (sempre ativos)
       "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
-      "DOGEUSDT","AVAXUSDT","LINKUSDT","NEARUSDT","INJUSDT",
-      "APTUSDT","ARBUSDT","OPUSDT","SUIUSDT","TIAUSDT",
-      "WLDUSDT","FETUSDT","TAOUSDT","RUNEUSDT","JUPUSDT",
+      "DOGEUSDT","ADAUSDT","AVAXUSDT","TRXUSDT","LINKUSDT",
+      // Tier 2 — Alta liquidez
+      "DOTUSDT","LTCUSDT","BCHUSDT","ATOMUSDT","NEARUSDT",
+      "APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT",
+      // Tier 3 — Volume médio-alto
+      "MATICUSDT","XLMUSDT","VETUSDT","HBARUSDT","ALGOUSDT",
+      "FILUSDT","ICPUSDT","ETCUSDT","STXUSDT","TONUSDT",
+      // DeFi — Alta volatilidade e oportunidade
+      "AAVEUSDT","UNIUSDT","MKRUSDT","CRVUSDT","SNXUSDT",
+      "GMXUSDT","DYDXUSDT","LDOUSDT","RUNEUSDT","JUPUSDT",
+      // Layer 2 e scaling
+      "IMXUSDT","STRKUSDT","ZROUSDT","MANTAUSDT","ALTUSDT",
+      "MNTUSDT","METISUSDT","LRCUSDT","ZKUSDT","SCROLLUSDT",
+      // AI e tecnologia
+      "FETUSDT","TAOUSDT","RENDERUSDT","WLDUSDT","GRTUSDT",
+      "AGIXUSDT","OCEANUSDT","NMRUSDT","RNDRLOMUSDT","VIRTUSDT",
+      // Gaming e Metaverso
+      "SANDUSDT","MANAUSDT","AXSUSDT","GALAUSDT","ENJUSDT",
+      "MAGICUSDT","YGGUSDT","ILVUSDT","BEASTSUSDT","PIXELUSDT",
+      // Memecoins com liquidez
+      "PEPEUSDT","FLOKIUSDT","BONKUSDT","WIFUSDT","SHIBUSDT",
+      "MEMEUSDT","DOGSUSDT","MOGATUSDT","POPCATUSDT","NEIROUSDT",
+      // Infraestrutura e storage
+      "STORJUSDT","CKBUSDT","ZILUSDT","ANKRUSDT","BATUSDT",
+      "ZECUSDT","COTIUSDT","ROSEUSDT","ONEUSDT","KAVAUSDT",
+      // DeFi blue chips
+      "COMPUSDT","YFIUSDT","BALUSDT","1INCHUSDT","BANDUSDT",
+      "ENSUSDT","IOTXUSDT","LPTUSDT","CELRUSDT","KSMUSDT",
+      // Novos e trending
+      "ENAUSDT","EIGENUSDT","ETHFIUSDT","MOVEUSDT","APEUSDT",
+      "WOOUSDT","MASKUSDT","ORDIUSDT","CHZUSDT","FTMUSDT",
+      // Cross-chain e interoperabilidade
+      "DYMUSDT","PYTHUSDT","TIAUSDT","SEIUSDT","EGLDUSDT",
+      "JTOAUSDT","WUSDT","JUPUSDT","TURBOUSDT","BOMEUSDT",
     ],
-    timeframes:    ["60","240"],            // 1H e 4H — mais confiáveis para futuros
-    minScore:      10,                      // score mínimo elevado para $100 real
+    timeframes:    ["15","60","240"],        // 15M, 1H, 4H — captura mais oportunidades
+    minScore:      8,                       // score mínimo — equilibrio entre qualidade e quantidade
     minConfidence: 65,                      // 65% mínimo de confiança
     maxRisk:       2,                       // 2% da banca por operação = $2 máx de perda
     autoExecute:   process.env.SIG_AUTO_EXECUTE === "true",
