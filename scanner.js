@@ -71,6 +71,55 @@ async function analyzePair(symbol, tf = "60", exchange = "bybit") {
 }
 
 // ── Scan completo de todos os pares ───────────────────────────────────
+
+// ── FILTROS PREMIUM — matemática para só entrar nos melhores setups ──────
+function passesFilters(a) {
+  const f   = cfg.signals.filters || {};
+  const dir = a.dir;
+
+  // 1. Score e confiança mínimos
+  if (Math.abs(a.score) < cfg.signals.minScore)   return false;
+  if (a.prob < cfg.signals.minConfidence)          return false;
+  if (dir === "NEUTRO")                            return false;
+
+  // 2. R/R mínimo
+  if (f.minRR && a.rr < f.minRR)                  return false;
+
+  // 3. Wyckoff — fase favorável obrigatória
+  if (f.requireWyckoff) {
+    const phase = a.phase || "";
+    if (f.blacklistPhases && f.blacklistPhases.includes(phase)) return false;
+    const goodPhases = ["ACUMULAÇÃO","MARKUP"];
+    if (dir === "LONG"  && !goodPhases.includes(phase))         return false;
+    if (dir === "SHORT" && phase !== "DISTRIBUIÇÃO" && phase !== "MARKDOWN") return false;
+  }
+
+  // 4. Order Block obrigatório na direção
+  if (f.requireOB) {
+    if (dir === "LONG"  && !a.obBull) return false;
+    if (dir === "SHORT" && !a.obBear) return false;
+  }
+
+  // 5. Volume obrigatório
+  if (f.requireVolume && a.volRatio < 1.2) return false;
+
+  // 6. MTF — alinhamento em múltiplos timeframes
+  if (f.requireMTFAlign) {
+    const mtfPct = a.mtfTotal > 0 ? a.mtfBull / a.mtfTotal : 0;
+    if (dir === "LONG"  && mtfPct < 0.6) return false;
+    if (dir === "SHORT" && mtfPct > 0.4) return false;
+  }
+
+  // 7. Não opera pares com volume muito baixo (evita manipulação)
+  if (a.volRatio < 0.3) return false;
+
+  // 8. Score deve ser positivo para LONG e negativo para SHORT
+  if (dir === "LONG"  && a.score < 0) return false;
+  if (dir === "SHORT" && a.score > 0) return false;
+
+  return true;
+}
+
 async function fullScan({ onSignal, onProgress, exchange = cfg.signals.defaultExchange }) {
   const pairs     = cfg.signals.pairs;
   const tf        = cfg.signals.timeframes[1]; // 1h padrão
@@ -86,8 +135,8 @@ async function fullScan({ onSignal, onProgress, exchange = cfg.signals.defaultEx
       const a = r.value;
       results.push(a);
 
-      // Emite sinal se score for suficiente
-      if (Math.abs(a.score) >= cfg.signals.minScore && a.dir !== "NEUTRO" && a.prob >= cfg.signals.minConfidence) {
+      // Aplica filtros premium — só os melhores setups
+      if (passesFilters(a)) {
         signals++;
         if (onSignal) onSignal(a);
       }
