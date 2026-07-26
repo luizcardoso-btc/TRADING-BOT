@@ -120,7 +120,7 @@ function passesFilters(a) {
   return true;
 }
 
-async function fullScan({ onSignal, onProgress, exchange = cfg.signals.defaultExchange }) {
+async function fullScan({ onSignal, onProgress, onPairResult, exchange = cfg.signals.defaultExchange }) {
   const pairs     = cfg.signals.pairs;
   const tf        = cfg.signals.timeframes[1]; // 1h padrão
   const results   = [];
@@ -134,6 +134,14 @@ async function fullScan({ onSignal, onProgress, exchange = cfg.signals.defaultEx
       if (r.status !== "fulfilled") return;
       const a = r.value;
       results.push(a);
+
+      // Broadcast resultado de cada par para o visualizador
+      if (onPairResult) onPairResult({
+        symbol: a.symbol, score: a.score, dir: a.dir, prob: a.prob,
+        phase: a.phase, rsi: +(a.rsi||0).toFixed(1), volRatio: +(a.volRatio||0).toFixed(2),
+        spring: a.spring, obBull: a.obBull, obBear: a.obBear,
+        hot: passesFilters(a), cur: a.cur,
+      });
 
       // Aplica filtros premium — só os melhores setups
       if (passesFilters(a)) {
