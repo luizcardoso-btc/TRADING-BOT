@@ -46,6 +46,12 @@ function request(url, opts = {}, body = null) {
 // ══════════════════════════════════════════════════════════════════════
 const Bybit = {
   name: "Bybit",
+  // Endpoints alternativos — rotaciona se CloudFront bloquear
+  ENDPOINTS: [
+    cfg.bybit.baseURL,
+    "https://api.bytick.com",      // endpoint alternativo oficial Bybit
+    "https://api.bybit.com",       // fallback direto
+  ],
   BASE: cfg.bybit.baseURL,
 
   _sign(params, ts) {
@@ -64,9 +70,26 @@ const Bybit = {
     };
   },
 
+  // Tenta endpoints em sequência até um funcionar
+  async _get(path) {
+    let lastErr;
+    for (const base of this.ENDPOINTS) {
+      try {
+        const d = await request(`${base}${path}`);
+        this.BASE = base; // atualiza para o que funcionou
+        return d;
+      } catch(e) {
+        lastErr = e;
+        if (!e.message.includes("403") && !e.message.includes("CloudFront")) throw e;
+        // Se for 403/CloudFront, tenta o próximo endpoint
+      }
+    }
+    throw lastErr;
+  },
+
   // Dados públicos
   async ticker(symbol, cat = "linear") {
-    const d = await request(`${this.BASE}/v5/market/tickers?category=${cat}&symbol=${symbol}`);
+    const d = await this._get(`/v5/market/tickers?category=${cat}&symbol=${symbol}`);
     const t = d?.result?.list?.[0];
     if (!t) throw new Error(`Bybit ticker não encontrado: ${symbol}`);
     return {
@@ -78,13 +101,13 @@ const Bybit = {
   },
 
   async candles(symbol, interval = "60", limit = 250, cat = "linear") {
-    const d = await request(`${this.BASE}/v5/market/kline?category=${cat}&symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    const d = await this._get(`/v5/market/kline?category=${cat}&symbol=${symbol}&interval=${interval}&limit=${limit}`);
     return (d.result?.list || []).reverse()
       .map(c => ({ t:+c[0], o:+c[1], h:+c[2], l:+c[3], c:+c[4], v:+c[5] }));
   },
 
   async orderbook(symbol, limit = 10, cat = "linear") {
-    const d = await request(`${this.BASE}/v5/market/orderbook?category=${cat}&symbol=${symbol}&limit=${limit}`);
+    const d = await this._get(`/v5/market/orderbook?category=${cat}&symbol=${symbol}&limit=${limit}`);
     const r = d?.result;
     return {
       exchange:"Bybit", symbol,
@@ -95,7 +118,7 @@ const Bybit = {
   },
 
   async fundingRate(symbol = "BTCUSDT") {
-    const d = await request(`${this.BASE}/v5/market/funding/history?category=linear&symbol=${symbol}&limit=1`);
+    const d = await this._get(`/v5/market/funding/history?category=linear&symbol=${symbol}&limit=1`);
     return +(d?.result?.list?.[0]?.fundingRate || 0);
   },
 
@@ -383,4 +406,28 @@ const Novadex = {
   },
 };
 
-module.exports = { Bybit, Binance, Novadex };
+
+// ── Testa qual endpoint está disponível ──────────────────────────────
+async function testBybitConnectivity() {
+  const endpoints = [
+    "https://api.bytick.com",
+    "https://api.bybit.com",
+  ];
+  for (const base of endpoints) {
+    try {
+      const d = await request(`${base}/v5/market/tickers?category=linear&symbol=BTCUSDT`);
+      if (d?.result?.list?.[0]) {
+        console.log(`[BYBIT] Conectado via ${base}`);
+        Bybit.BASE = base;
+        Bybit.ENDPOINTS.unshift(base); // prioriza este
+        return base;
+      }
+    } catch(e) {
+      console.warn(`[BYBIT] ${base} bloqueado: ${e.message.slice(0,60)}`);
+    }
+  }
+  console.error("[BYBIT] Todos os endpoints bloqueados");
+  return null;
+}
+
+module.exports = { Bybit, Binance, Novadex, testBybitConnectivity };
