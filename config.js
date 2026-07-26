@@ -46,52 +46,58 @@ module.exports = {
 
   // ── SINAIS AUTOMÁTICOS ────────────────────────────────
   signals: {
-    // Top 100 pares por volume e liquidez na Bybit Futures
+    // Top 100 pares por volume — priorizados por liquidez para execução precisa
     pairs: [
-      // Tier 1 — Maior liquidez e volume (sempre ativos)
+      // Tier 1 — Liquidez máxima (sempre operar)
       "BTCUSDT","ETHUSDT","SOLUSDT","BNBUSDT","XRPUSDT",
       "DOGEUSDT","ADAUSDT","AVAXUSDT","TRXUSDT","LINKUSDT",
       // Tier 2 — Alta liquidez
       "DOTUSDT","LTCUSDT","BCHUSDT","ATOMUSDT","NEARUSDT",
       "APTUSDT","ARBUSDT","OPUSDT","INJUSDT","SUIUSDT",
-      // Tier 3 — Volume médio-alto
       "MATICUSDT","XLMUSDT","VETUSDT","HBARUSDT","ALGOUSDT",
       "FILUSDT","ICPUSDT","ETCUSDT","STXUSDT","TONUSDT",
-      // DeFi — Alta volatilidade e oportunidade
+      // DeFi
       "AAVEUSDT","UNIUSDT","MKRUSDT","CRVUSDT","SNXUSDT",
       "GMXUSDT","DYDXUSDT","LDOUSDT","RUNEUSDT","JUPUSDT",
-      // Layer 2 e scaling
+      // Layer 2
       "IMXUSDT","STRKUSDT","ZROUSDT","MANTAUSDT","ALTUSDT",
-      "MNTUSDT","METISUSDT","LRCUSDT","ZKUSDT","SCROLLUSDT",
-      // AI e tecnologia
+      "MNTUSDT","LRCUSDT","ENAUSDT","EIGENUSDT","ETHFIUSDT",
+      // AI
       "FETUSDT","TAOUSDT","RENDERUSDT","WLDUSDT","GRTUSDT",
-      "AGIXUSDT","OCEANUSDT","NMRUSDT","RNDRLOMUSDT","VIRTUSDT",
-      // Gaming e Metaverso
+      "AGIXUSDT","OCEANUSDT","MOVEUSDT","WOOUSDT","MASKUSDT",
+      // Gaming
       "SANDUSDT","MANAUSDT","AXSUSDT","GALAUSDT","ENJUSDT",
-      "MAGICUSDT","YGGUSDT","ILVUSDT","BEASTSUSDT","PIXELUSDT",
-      // Memecoins com liquidez
+      "MAGICUSDT","APEUSDT","ORDIUSDT","CHZUSDT","FTMUSDT",
+      // Memecoins líquidas
       "PEPEUSDT","FLOKIUSDT","BONKUSDT","WIFUSDT","SHIBUSDT",
-      "MEMEUSDT","DOGSUSDT","MOGATUSDT","POPCATUSDT","NEIROUSDT",
-      // Infraestrutura e storage
-      "STORJUSDT","CKBUSDT","ZILUSDT","ANKRUSDT","BATUSDT",
-      "ZECUSDT","COTIUSDT","ROSEUSDT","ONEUSDT","KAVAUSDT",
-      // DeFi blue chips
-      "COMPUSDT","YFIUSDT","BALUSDT","1INCHUSDT","BANDUSDT",
-      "ENSUSDT","IOTXUSDT","LPTUSDT","CELRUSDT","KSMUSDT",
-      // Novos e trending
-      "ENAUSDT","EIGENUSDT","ETHFIUSDT","MOVEUSDT","APEUSDT",
-      "WOOUSDT","MASKUSDT","ORDIUSDT","CHZUSDT","FTMUSDT",
-      // Cross-chain e interoperabilidade
+      "MEMEUSDT","POPCATUSDT","NEIROUSDT","BOMEUSDT","TURBOUSDT",
+      // Infra
+      "STORJUSDT","CKBUSDT","ANKRUSDT","BATUSDT","ZECUSDT",
+      "ROSEUSDT","KAVAUSDT","COMPUSDT","BALUSDT","1INCHUSDT",
+      // Cross-chain
       "DYMUSDT","PYTHUSDT","TIAUSDT","SEIUSDT","EGLDUSDT",
-      "JTOAUSDT","WUSDT","JUPUSDT","TURBOUSDT","BOMEUSDT",
+      "TAOUSDT","RUNEUSDT","JUPUSDT","LDOUSDT","WLDUSDT",
     ],
-    timeframes:    ["15","60","240"],        // 15M, 1H, 4H — captura mais oportunidades
-    minScore:      8,                       // score mínimo — equilibrio entre qualidade e quantidade
-    minConfidence: 65,                      // 65% mínimo de confiança
-    maxRisk:       2,                       // 2% da banca por operação = $2 máx de perda
+    timeframes:    ["60","240"],            // 1H e 4H — mais confiáveis, menos ruído
+    minScore:      14,                      // Score alto = só os melhores setups
+    minConfidence: 72,                      // 72%+ de confiança
+    maxRisk:       1.5,                     // 1.5% da banca por operação
     autoExecute:   process.env.SIG_AUTO_EXECUTE === "true",
-    defaultLeverage: parseInt(process.env.DEFAULT_LEVERAGE || "3"), // 3x conservador
+    defaultLeverage: parseInt(process.env.DEFAULT_LEVERAGE || "5"),
     defaultExchange: process.env.DEFAULT_EXCHANGE || "bybit",
+
+    // ── FILTROS PREMIUM — só entra se tudo estiver alinhado ──────────
+    filters: {
+      requireWyckoff:    true,   // Exige fase Wyckoff favorável (Acumulação ou Markup)
+      requireOB:         true,   // Exige Order Block ativo na direção do trade
+      requireMTFAlign:   true,   // Exige alinhamento em pelo menos 2 timeframes
+      requireVolume:     true,   // Exige volume acima da média (ratio > 1.2x)
+      requireSpring:     false,  // Spring é bônus — não obrigatório
+      minRR:             2.0,    // R/R mínimo de 2:1
+      maxSpreadPct:      0.15,   // Spread máximo 0.15% para garantir execução
+      blacklistPhases:   ["DISTRIBUIÇÃO","MARKDOWN"], // Nunca LONG em distribuição
+      requireBOSConfirm: false,  // BOS é bônus
+    },
   },
 
   // ── RISCO GLOBAL — Configurado para $100 USDT real ──────
