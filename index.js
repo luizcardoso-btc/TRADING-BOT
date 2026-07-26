@@ -1895,6 +1895,10 @@ function connectWS() {
         updateRisk(msg.data.risk);
         renderSignals(); renderArb(); renderOvFeeds();
         break;
+      case 'pair_result':
+        // Atualiza contador de pares analisados no overview
+        { const el=document.getElementById('ovSig'); if(el&&msg.data.hot) el.textContent=parseInt(el.textContent||0)+1; }
+        break;
       case 'signal':
         signals.unshift(msg.data);
         if(signals.length>200) signals.length=200;
@@ -1914,11 +1918,17 @@ function connectWS() {
         document.getElementById('btnFullScan').disabled=true;
         document.getElementById('scanStatus').textContent='Scanning...';
         break;
-      case 'scan_progress':
-        const pct = Math.round((msg.data.done/msg.data.total)*100);
-        document.getElementById('progFill').style.width=pct+'%';
-        document.getElementById('scanLbl').textContent=\`\${msg.data.done}/\${msg.data.total} analisados · \${msg.data.signals} sinais\`;
+      case 'scan_progress': {
+        const done  = msg.data.done  || 0;
+        const total = msg.data.total || 100;
+        const sigs  = msg.data.signals || 0;
+        const pct   = Math.round((done/total)*100);
+        const progFill = document.getElementById('progFill');
+        const scanLbl  = document.getElementById('scanLbl');
+        if(progFill) progFill.style.width=pct+'%';
+        if(scanLbl)  scanLbl.textContent=done+'/'+total+' analisados · '+sigs+' sinais';
         break;
+      }
       case 'scan_done':
         document.getElementById('scanProg').style.display='none';
         document.getElementById('btnFullScan').disabled=false;
@@ -1952,12 +1962,18 @@ function setPill(on) {
 }
 
 // ══ API ═════════════════════════════════════════════════════════════
-const api = (path, method='GET', body=null) =>
-  fetch(BOT_URL+path, {
+const api = (path, method='GET', body=null) => {
+  const base = BOT_URL || window.location.origin;
+  const key  = ADMIN_KEY || localStorage.getItem('acs_bot_key') || '';
+  return fetch(base+path, {
     method,
-    headers: { 'x-admin-key':ADMIN_KEY, 'Content-Type':'application/json' },
+    headers: { 'x-admin-key':key, 'Content-Type':'application/json' },
     ...(body ? { body:JSON.stringify(body) } : {}),
-  }).then(r=>r.json());
+  }).then(r=>{
+    if(!r.ok && r.status===401) throw new Error('Admin Key inválida');
+    return r.json();
+  }).catch(e=>{ console.error('[API]',path,e.message); return { ok:false, error:e.message }; });
+};
 
 async function loadStatus() {
   const d = await api('/api/status').catch(()=>null);
@@ -2015,8 +2031,19 @@ async function loadTrades() {
 
 // ══ SCAN CONTROLS ════════════════════════════════════════════════════
 async function startScan(mode='full') {
-  const ex=document.getElementById('cfgEx')?.value||'bybit';
-  await api('/api/scan/start','POST',{mode,exchange:ex});
+  const ex = document.getElementById('cfgEx')?.value || 'bybit';
+  const btn = document.getElementById('btnFullScan');
+  if(btn) btn.disabled=true;
+  try {
+    const r = await api('/api/scan/start','POST',{mode,exchange:ex});
+    if(!r?.ok) {
+      toast('❌ Erro ao iniciar scan: '+(r?.msg||'Verifique a Admin Key'),'error');
+      if(btn) btn.disabled=false;
+    }
+  } catch(e) {
+    toast('❌ '+e.message,'error');
+    if(btn) btn.disabled=false;
+  }
 }
 
 async function startArbScan() {
@@ -2339,13 +2366,12 @@ server.listen(cfg.port, () => {
   console.log(`╚═══════════════════════════════════════╝\n`);
 
   // Testa conectividade Bybit no boot
-  testBybitConnectivity().then(endpoint => {
-    if (endpoint) {
-      console.log(`[BOT] Bybit OK via ${endpoint}`);
-    } else {
-      console.warn("[BOT] ⚠️  Bybit bloqueada — verifique a região do servidor");
-    }
-  });
+  if (typeof testBybitConnectivity === 'function') {
+    testBybitConnectivity().then(endpoint => {
+      if (endpoint) console.log(`[BOT] Bybit OK via ${endpoint}`);
+      else console.warn("[BOT] ⚠️  Bybit bloqueada — verifique a região do servidor");
+    }).catch(e => console.warn("[BOT] Bybit connectivity check:", e.message));
+  }
 
   // Inicia monitor de posições
   executor.startMonitor();
