@@ -454,9 +454,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:1
         <div class="login-sub">CEX + DEX · AUTO OPERATIONS</div>
       </div>
     </div>
-    <input class="login-input" id="loginUrl" placeholder="URL do bot (https://...railway.app)" type="url"/>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--dim);background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:10px 14px;">
+      🌐 <span id="detectedUrl" style="color:var(--green)"></span>
+    </div>
     <input class="login-input" id="loginKey" placeholder="Admin Key..." type="password" onkeydown="if(event.key==='Enter')doLogin()"/>
-    <button class="login-btn" onclick="doLogin()" id="loginBtn">CONECTAR AO BOT</button>
+    <button class="login-btn" onclick="doLogin()" id="loginBtn">ACESSAR DASHBOARD</button>
     <div class="login-err" id="loginErr"></div>
   </div>
 </div>
@@ -676,47 +678,33 @@ let autoScanOn=false, autoSigExec=false, autoArbExec=false;
 
 // ══ LOGIN ═══════════════════════════════════════════════════════════
 async function doLogin() {
-  const urlEl = document.getElementById('loginUrl');
-  const keyEl = document.getElementById('loginKey');
-  const err   = document.getElementById('loginErr');
-  const btn   = document.getElementById('loginBtn');
-  if (!urlEl||!keyEl||!err||!btn) { alert('Elementos não encontrados'); return; }
+  // URL é sempre o próprio servidor — sem digitar nada
+  const origin = window.location.origin;
+  const keyEl  = document.getElementById('loginKey');
+  const err    = document.getElementById('loginErr');
+  const btn    = document.getElementById('loginBtn');
 
-  const url = (urlEl.value||urlEl.placeholder||'').trim().replace(/\/+$/,'');
-  const key = keyEl.value.trim();
+  const key = (keyEl ? keyEl.value : '').trim();
+  if (!key) { if(err) err.textContent='Digite a Admin Key.'; return; }
 
-  err.textContent='';
-
-  if (!url) { err.textContent='Digite a URL do bot.'; return; }
-  if (!key) { err.textContent='Digite a Admin Key.'; return; }
-
-  btn.disabled=true; btn.textContent='Conectando...';
-  err.textContent='Verificando '+url+' ...';
+  if(err) err.textContent='';
+  if(btn) { btn.disabled=true; btn.textContent='Verificando...'; }
 
   try {
-    // Testa health com timeout
-    const ctrl = new AbortController();
-    const tid  = setTimeout(()=>ctrl.abort(), 8000);
-    const r    = await fetch(url+'/health', { signal:ctrl.signal }).catch(e=>{ throw new Error('Não foi possível alcançar o bot: '+e.message); });
-    clearTimeout(tid);
+    const r = await fetch(origin+'/health');
+    if (!r.ok) throw new Error('Servidor retornou '+r.status);
+    const h = await r.json();
+    if (!h.ok) throw new Error('Health check falhou');
 
-    if (!r.ok) throw new Error('Bot respondeu com erro HTTP '+r.status);
+    const r2 = await fetch(origin+'/api/status', {
+      headers: { 'x-admin-key': key }
+    });
+    if (r2.status === 401) throw new Error('Admin Key incorreta');
+    if (!r2.ok) throw new Error('Erro '+r2.status+' ao verificar chave');
 
-    const health = await r.json().catch(()=>({}));
-    if (!health.ok) throw new Error('Resposta inesperada do bot');
-
-    // Testa auth
-    const r2 = await fetch(url+'/api/status', {
-      headers: { 'x-admin-key': key, 'Content-Type':'application/json' }
-    }).catch(e=>{ throw new Error('Erro ao verificar chave: '+e.message); });
-
-    if (r2.status === 401) throw new Error('Admin Key inválida');
-    if (!r2.ok) throw new Error('Erro na API: '+r2.status);
-
-    // Sucesso
-    BOT_URL    = url;
-    ADMIN_KEY  = key;
-    localStorage.setItem('acs_bot_url', url);
+    BOT_URL   = origin;
+    ADMIN_KEY = key;
+    localStorage.setItem('acs_bot_url', origin);
     localStorage.setItem('acs_bot_key', key);
 
     document.getElementById('loginScreen').style.display='none';
@@ -724,12 +712,11 @@ async function doLogin() {
     initApp();
 
   } catch(e) {
-    err.textContent='❌ '+e.message;
+    if(err) err.textContent='❌ '+e.message;
     console.error('[LOGIN]', e);
   }
 
-  btn.disabled=false;
-  btn.textContent='CONECTAR AO BOT';
+  if(btn) { btn.disabled=false; btn.textContent='ACESSAR DASHBOARD'; }
 }
 
 function doLogout() {
@@ -740,15 +727,25 @@ function doLogout() {
 }
 
 (async () => {
-  const url = localStorage.getItem('acs_bot_url');
-  const key = localStorage.getItem('acs_bot_key');
-  if (!url||!key) return;
-  document.getElementById('loginUrl').value=url;
-  document.getElementById('loginKey').value=key;
-  BOT_URL=url; ADMIN_KEY=key;
+  // Mostra URL detectada na tela de login
+  const el = document.getElementById('detectedUrl');
+  if (el) el.textContent = window.location.origin;
+
+  // Auto-login se já tem chave salva
+  const savedKey = localStorage.getItem('acs_bot_key');
+  const origin   = window.location.origin;
+  if (!savedKey) return;
+
+  const keyEl = document.getElementById('loginKey');
+  if (keyEl) keyEl.value = savedKey;
+
   try {
-    const r = await fetch(url+'/api/status', { headers:{'x-admin-key':key} });
+    const r = await fetch(origin+'/api/status', {
+      headers: { 'x-admin-key': savedKey }
+    });
     if (r.ok) {
+      BOT_URL   = origin;
+      ADMIN_KEY = savedKey;
       document.getElementById('loginScreen').style.display='none';
       document.getElementById('app').style.display='flex';
       initApp();
